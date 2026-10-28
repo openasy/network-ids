@@ -1,0 +1,94 @@
+/* The few layouts this product needs that @openasy/ui's prebuilt styles do not include. Colours stay in the library's tokens. */
+
+/* One line of a long value in a table cell; the full text is in the title. */
+.nids-clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  max-width: 36rem;
+  overflow-wrap: anywhere;
+}
+
+/* Names and addresses break anywhere rather than widening their column. */
+.nids-wrap {
+  overflow-wrap: anywhere;
+}
+
+.nids-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* One suppression of the list. */
+.nids-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--oa-line);
+}
+
+.nids-row:last-child {
+  border-bottom: 0;
+}
+
+/* Facts of an alert, a flow or a sensor: a label, then its value. */
+.nids-facts {
+  display: grid;
+  grid-template-columns: minmax(7rem, max-content) minmax(0, 1fr);
+  gap: 0.375rem 1rem;
+  margin: 0;
+}
+
+.nids-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* A sensor's numbers side by side. */
+.nids-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.nids-stats dd {
+  margin: 0;
+}
+
+/* Sensors as cards, two side by side from 1024px. */
+.nids-cards {
+  display: grid;
+  gap: 0.625rem;
+}
+
+@media (min-width: 1024px) {
+  .nids-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* The numbered steps of the first screen and of Setup. */
+.nids-steps {
+  list-style: decimal;
+  margin: 0;
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.nids-textarea {
+  font: inherit;
+  font-family: var(--oa-font-mono);
+  font-size: 0.75rem;
+  padding: 0.5rem;
+  border: 1px solid var(--oa-line);
+  border-radius: 0.375rem;
+  background: transparent;
+  color: inherit;
+  resize: vertical;
+}

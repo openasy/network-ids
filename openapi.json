@@ -1,0 +1,3279 @@
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "OpenAsy Network IDS API",
+    "version": "0.1.0",
+    "summary": "Suricata alerts, flows and protocol logs from sensors on a copy of your traffic, with local rules and suppressions.",
+    "description": "Every screen of Network IDS uses this API, and so can your scripts (ADR 0014). Within `/api/v1` changes are additive only; anything removed is deprecated first (ADR 0024). Errors use Problem Details (RFC 9457).\n\nSensors send their events through network-ids-agent, which enrols once with a token from `POST /api/v1/sensors` and then calls `/api/v1/agent/*` with its own secret. Everything else takes the session of a signed-in person or an API token, and each operation names the role it needs (`x-openasy-role`: viewer, editor, admin; ADR 0003).\n\nSign-in, members and API tokens are under `/api/v1/auth`, provided by [@openasy/auth](https://github.com/openasy/auth#routes).",
+    "license": {
+      "name": "AGPL-3.0-only",
+      "identifier": "AGPL-3.0-only"
+    }
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "This Network IDS"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Alerts",
+      "description": "Signatures that matched traffic."
+    },
+    {
+      "name": "Flows",
+      "description": "Who talked to whom, when and how much."
+    },
+    {
+      "name": "Protocols",
+      "description": "DNS, HTTP, TLS and SSH logs."
+    },
+    {
+      "name": "Rules",
+      "description": "Local rules and suppressions, sent to every sensor."
+    },
+    {
+      "name": "Sensors",
+      "description": "Where Suricata listens, and its health."
+    },
+    {
+      "name": "Agent",
+      "description": "For network-ids-agent only."
+    },
+    {
+      "name": "Product",
+      "description": "Version and overview of this Network IDS."
+    }
+  ],
+  "paths": {
+    "/api/v1/alerts": {
+      "get": {
+        "operationId": "listAlerts",
+        "tags": [
+          "Alerts"
+        ],
+        "summary": "Alerts",
+        "description": "Needs the viewer role. Newest first. Suppressed alerts are left out unless asked for.",
+        "parameters": [
+          {
+            "name": "hours",
+            "in": "query",
+            "required": false,
+            "description": "How far back, in hours: 24 unless set.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9600
+            }
+          },
+          {
+            "name": "severity",
+            "in": "query",
+            "required": false,
+            "description": "One or more severities.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "critical",
+                "high",
+                "medium",
+                "low"
+              ]
+            }
+          },
+          {
+            "name": "sensor",
+            "in": "query",
+            "required": false,
+            "description": "One or more sensor ids.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "A word of the signature, an address, a sid or a Community ID.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "suppressed",
+            "in": "query",
+            "required": false,
+            "description": "false (the default), true or all.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false",
+                "all"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "viewer"
+      }
+    },
+    "/api/v1/alerts/{id}": {
+      "get": {
+        "operationId": "getAlert",
+        "tags": [
+          "Alerts"
+        ],
+        "summary": "An alert, with its flow",
+        "description": "Needs the viewer role. With the EVE event, the flow it was in, that flow's protocol logs and other alerts, and the suppression that covers it.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The alert's id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "viewer"
+      }
+    },
+    "/api/v1/flows": {
+      "get": {
+        "operationId": "listFlows",
+        "tags": [
+          "Flows"
+        ],
+        "summary": "Flows",
+        "description": "Needs the viewer role. Newest first. q is terms joined by and: ip, src_ip, dest_ip, port, src_port, dest_port, proto, app_proto, state, community_id, sensor and alerted, as key:value; a bare term is an address.",
+        "parameters": [
+          {
+            "name": "hours",
+            "in": "query",
+            "required": false,
+            "description": "How far back, in hours: 24 unless set.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9600
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "Such as `app_proto:dns src_ip:192.0.2.17`.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FlowList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "viewer"
+      }
+    },
+    "/api/v1/flows/{id}": {
+      "get": {
+        "operationId": "getFlow",
+        "tags": [
+          "Flows"
+        ],
+        "summary": "A flow, with its logs and alerts",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The flow's id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FlowDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "viewer",
+        "description": "Needs the viewer role."
+      }
+    },
+    "/api/v1/protocols/{kind}": {
+      "get": {
+        "operationId": "listRecords",
+        "tags": [
+          "Protocols"
+        ],
+        "summary": "Protocol logs of one kind",
+        "description": "Needs the viewer role. Newest first, with the names seen most.",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "dns",
+                "http",
+                "tls",
+                "ssh"
+              ]
+            }
+          },
+          {
+            "name": "hours",
+            "in": "query",
+            "required": false,
+            "description": "How far back, in hours: 24 unless set.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9600
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "A part of the name, or an address.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "viewer"
+      }
+    },
+    "/api/v1/rules": {
+      "get": {
+        "operationId": "listRules",
+        "tags": [
+          "Rules"
+        ],
+        "summary": "Local rules",
+        "description": "Needs the viewer role. With how many sensors have written the current rules and suppressions.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "viewer"
+      },
+      "post": {
+        "operationId": "createRule",
+        "tags": [
+          "Rules"
+        ],
+        "summary": "Add a local rule",
+        "description": "Needs the editor role. Every sensor writes it at its next call and reloads Suricata.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewRule"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Added.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Rule"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "editor"
+      }
+    },
+    "/api/v1/rules/check": {
+      "post": {
+        "operationId": "checkRule",
+        "tags": [
+          "Rules"
+        ],
+        "summary": "Check a rule",
+        "description": "Needs the viewer role. Reads it as it would be kept, without keeping it. Pass the rule's id to check a change to it.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "text"
+                ],
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuleCheck"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "viewer"
+      }
+    },
+    "/api/v1/rules/{id}": {
+      "put": {
+        "operationId": "updateRule",
+        "tags": [
+          "Rules"
+        ],
+        "summary": "Change a local rule, or turn it off",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The rule's id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuleChange"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Rule"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "editor",
+        "description": "Needs the editor role."
+      },
+      "delete": {
+        "operationId": "deleteRule",
+        "tags": [
+          "Rules"
+        ],
+        "summary": "Delete a local rule",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The rule's id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted."
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "editor",
+        "description": "Needs the editor role."
+      }
+    },
+    "/api/v1/suppressions": {
+      "get": {
+        "operationId": "listSuppressions",
+        "tags": [
+          "Rules"
+        ],
+        "summary": "Suppressions",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuppressionList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "viewer",
+        "description": "Needs the viewer role."
+      },
+      "post": {
+        "operationId": "createSuppression",
+        "tags": [
+          "Rules"
+        ],
+        "summary": "Suppress a signature",
+        "description": "Needs the editor role. For every address, or from or to one network. Sensors stop alerting on it; alerts that still come are kept, marked suppressed.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewSuppression"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Added.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Suppression"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "editor"
+      }
+    },
+    "/api/v1/suppressions/{id}": {
+      "delete": {
+        "operationId": "deleteSuppression",
+        "tags": [
+          "Rules"
+        ],
+        "summary": "End a suppression",
+        "description": "Needs the editor role. It is kept as ended while alerts it covered are.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The suppression's id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Ended."
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "editor"
+      }
+    },
+    "/api/v1/sensors": {
+      "get": {
+        "operationId": "listSensors",
+        "tags": [
+          "Sensors"
+        ],
+        "summary": "Sensors and their health",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SensorList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "viewer",
+        "description": "Needs the viewer role."
+      },
+      "post": {
+        "operationId": "createSensor",
+        "tags": [
+          "Sensors"
+        ],
+        "summary": "Add a sensor",
+        "description": "Needs the admin role. Returns the one-time token its agent enrols with.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewSensor"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Added.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SensorEnrollment"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "admin"
+      }
+    },
+    "/api/v1/sensors/{id}": {
+      "get": {
+        "operationId": "getSensor",
+        "tags": [
+          "Sensors"
+        ],
+        "summary": "A sensor",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The sensor's id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Sensor"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "viewer",
+        "description": "Needs the viewer role."
+      },
+      "delete": {
+        "operationId": "deleteSensor",
+        "tags": [
+          "Sensors"
+        ],
+        "summary": "Delete a sensor",
+        "description": "Needs the admin role. With everything it sent.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The sensor's id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted."
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "admin"
+      }
+    },
+    "/api/v1/sensors/{id}/enroll-token": {
+      "post": {
+        "operationId": "reEnrollSensor",
+        "tags": [
+          "Sensors"
+        ],
+        "summary": "A new enrolment token",
+        "description": "Needs the admin role. The agent's secret stops working; start the agent with the new token.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The sensor's id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SensorEnrollment"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "admin"
+      }
+    },
+    "/api/v1/agent/enroll": {
+      "post": {
+        "operationId": "agentEnroll",
+        "tags": [
+          "Agent"
+        ],
+        "summary": "Enrol an agent",
+        "description": "Once, with the sensor's enrolment token; the answer holds the agent's own secret.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentEnroll"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentEnrolled"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/api/v1/agent/config": {
+      "post": {
+        "operationId": "agentConfig",
+        "summary": "What the sensor writes",
+        "description": "The agent says what it last wrote; the answer is the local rules and suppressions to write now. An agent of another version is refused.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentReport"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentConfig"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "tags": [
+          "Agent"
+        ],
+        "security": [
+          {
+            "agentSecret": []
+          }
+        ]
+      }
+    },
+    "/api/v1/agent/events": {
+      "post": {
+        "operationId": "agentEvents",
+        "summary": "Send EVE events",
+        "description": "JSON, gzipped with Content-Encoding: gzip, at most 32 MiB unpacked. A batch sent again counts once.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EventBatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventsResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "tags": [
+          "Agent"
+        ],
+        "security": [
+          {
+            "agentSecret": []
+          }
+        ]
+      }
+    },
+    "/api/v1/summary": {
+      "get": {
+        "operationId": "getSummary",
+        "tags": [
+          "Product"
+        ],
+        "summary": "Overview",
+        "description": "Needs the viewer role. The last 24 hours: alerts by severity and hour, top talkers and signatures, sensors and rules.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Summary"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "viewer"
+      }
+    },
+    "/api/v1/products": {
+      "get": {
+        "operationId": "listProducts",
+        "tags": [
+          "Product"
+        ],
+        "summary": "Other products of this install",
+        "responses": {
+          "200": {
+            "description": "From OPENASY_PRODUCTS, for the product switcher.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "viewer",
+        "description": "Needs the viewer role."
+      }
+    },
+    "/api/v1/version": {
+      "get": {
+        "operationId": "getVersion",
+        "tags": [
+          "Product"
+        ],
+        "summary": "Version",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "The running version.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Version"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/healthz": {
+      "get": {
+        "operationId": "liveness",
+        "tags": [
+          "Product"
+        ],
+        "summary": "Liveness",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "The process is running.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/readyz": {
+      "get": {
+        "operationId": "readiness",
+        "tags": [
+          "Product"
+        ],
+        "summary": "Readiness",
+        "description": "Ready while the database answers.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Ready to serve.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The database is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "operationId": "metrics",
+        "tags": [
+          "Product"
+        ],
+        "summary": "Prometheus metrics",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Metrics in the Prometheus text format.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "session": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-openasy-session",
+        "description": "The browser session after signing in (`openasy-session` when Network IDS runs on plain http://localhost). Requests that change something must come from the Network IDS origin."
+      },
+      "apiToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "An API token created under Settings → API tokens (`oa_network-ids_...`): one role, always an expiry (ADR 0003)."
+      },
+      "adminToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Only when Network IDS is started by its tests or a local script: one shared token with the admin role. A production install does not have it."
+      },
+      "agentSecret": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "The secret network-ids-agent got when it enrolled (`oia_...`). It reads the sensor's rules and sends its events, nothing else."
+      }
+    },
+    "responses": {
+      "Problem": {
+        "description": "An error, as RFC 9457 Problem Details.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Problem": {
+        "type": "object",
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "format": "uri"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "invalid-token",
+              "invalid-json",
+              "invalid-body",
+              "conflict",
+              "not-found",
+              "payload-too-large",
+              "internal-error",
+              "unauthenticated",
+              "invalid-credentials",
+              "mfa-required",
+              "mfa-setup-required",
+              "forbidden",
+              "cross-site",
+              "rate-limited"
+            ],
+            "description": "Stable; match on this."
+          },
+          "detail": {
+            "type": "string"
+          }
+        }
+      },
+      "Status": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "Version": {
+        "type": "object",
+        "required": [
+          "product",
+          "version"
+        ],
+        "properties": {
+          "product": {
+            "const": "network-ids"
+          },
+          "version": {
+            "type": "string"
+          }
+        }
+      },
+      "ProductLink": {
+        "type": "object",
+        "required": [
+          "id",
+          "url"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The product, as OpenAsy names it.",
+            "examples": [
+              "siem"
+            ]
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "The address people open it at.",
+            "examples": [
+              "https://siem.example.com"
+            ]
+          }
+        }
+      },
+      "ProductList": {
+        "type": "object",
+        "required": [
+          "products"
+        ],
+        "properties": {
+          "products": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductLink"
+            }
+          }
+        }
+      },
+      "Alert": {
+        "type": "object",
+        "required": [
+          "id",
+          "time",
+          "sensor",
+          "flowId",
+          "communityId",
+          "srcIp",
+          "srcPort",
+          "destIp",
+          "destPort",
+          "proto",
+          "appProto",
+          "gid",
+          "sid",
+          "rev",
+          "signature",
+          "category",
+          "severity",
+          "action",
+          "suppressedBy"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sensor": {
+            "type": "object",
+            "required": [
+              "id",
+              "name"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          },
+          "flowId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Suricata's flow id on that sensor; the flow and protocol logs of the alert share it."
+          },
+          "communityId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The Community ID of the flow, when Suricata writes it: the same flow in Zeek and other tools."
+          },
+          "srcIp": {
+            "type": "string"
+          },
+          "srcPort": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 65535
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "destIp": {
+            "type": "string"
+          },
+          "destPort": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 65535
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "proto": {
+            "type": "string",
+            "examples": [
+              "TCP"
+            ]
+          },
+          "appProto": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "gid": {
+            "type": "integer"
+          },
+          "sid": {
+            "type": "integer"
+          },
+          "rev": {
+            "type": "integer"
+          },
+          "signature": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "critical",
+              "high",
+              "medium",
+              "low"
+            ],
+            "description": "From ET's signature_severity metadata, or Suricata's severity: 1 high, 2 medium, 3 and more low."
+          },
+          "action": {
+            "type": "string",
+            "description": "What Suricata did: allowed, as an IDS does."
+          },
+          "suppressedBy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The suppression that covers it; such alerts are kept and left out of counts."
+          }
+        }
+      },
+      "AlertList": {
+        "type": "object",
+        "required": [
+          "alerts",
+          "total"
+        ],
+        "properties": {
+          "alerts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Alert"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "description": "All that match; at most 500 are listed, newest first."
+          }
+        }
+      },
+      "AlertDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Alert"
+          },
+          {
+            "type": "object",
+            "required": [
+              "event",
+              "suppression",
+              "flow",
+              "records",
+              "otherAlerts"
+            ],
+            "properties": {
+              "event": {
+                "type": "object",
+                "description": "The EVE event as the sensor sent it, without packet payloads."
+              },
+              "suppression": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/Suppression"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "flow": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/Flow"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "records": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Record"
+                }
+              },
+              "otherAlerts": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Alert"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "Flow": {
+        "type": "object",
+        "required": [
+          "id",
+          "sensor",
+          "start",
+          "end",
+          "flowId",
+          "communityId",
+          "srcIp",
+          "srcPort",
+          "destIp",
+          "destPort",
+          "proto",
+          "appProto",
+          "pktsToServer",
+          "pktsToClient",
+          "bytesToServer",
+          "bytesToClient",
+          "state",
+          "reason",
+          "alerted"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "sensor": {
+            "type": "object",
+            "required": [
+              "id",
+              "name"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "flowId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "communityId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "srcIp": {
+            "type": "string"
+          },
+          "srcPort": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 65535
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "destIp": {
+            "type": "string"
+          },
+          "destPort": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 65535
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "proto": {
+            "type": "string"
+          },
+          "appProto": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pktsToServer": {
+            "type": "integer"
+          },
+          "pktsToClient": {
+            "type": "integer"
+          },
+          "bytesToServer": {
+            "type": "integer"
+          },
+          "bytesToClient": {
+            "type": "integer"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How Suricata saw it end: new, established, closed, bypassed."
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the flow record was written: timeout, forced, shutdown."
+          },
+          "alerted": {
+            "type": "boolean"
+          }
+        }
+      },
+      "FlowList": {
+        "type": "object",
+        "required": [
+          "flows",
+          "total",
+          "bytes",
+          "unanswered",
+          "longLived"
+        ],
+        "properties": {
+          "flows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Flow"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "bytes": {
+            "type": "integer",
+            "description": "Both ways, of every flow that matches."
+          },
+          "unanswered": {
+            "type": "integer",
+            "description": "Flows the other side sent nothing back on."
+          },
+          "longLived": {
+            "type": "integer",
+            "description": "Flows of more than an hour: check those for beacons."
+          }
+        }
+      },
+      "FlowDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Flow"
+          },
+          {
+            "type": "object",
+            "required": [
+              "records",
+              "alerts"
+            ],
+            "properties": {
+              "records": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Record"
+                }
+              },
+              "alerts": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Alert"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "Record": {
+        "type": "object",
+        "required": [
+          "id",
+          "sensor",
+          "time",
+          "kind",
+          "flowId",
+          "srcIp",
+          "srcPort",
+          "destIp",
+          "destPort",
+          "name",
+          "detail"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "sensor": {
+            "type": "object",
+            "required": [
+              "id",
+              "name"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          },
+          "time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "dns",
+              "http",
+              "tls",
+              "ssh"
+            ]
+          },
+          "flowId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "srcIp": {
+            "type": "string"
+          },
+          "srcPort": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 65535
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "destIp": {
+            "type": "string"
+          },
+          "destPort": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 65535
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "type": "string",
+            "description": "The DNS name, the HTTP host, the TLS server name or the SSH client."
+          },
+          "detail": {
+            "type": "object",
+            "description": "The fields kept of Suricata's record: rrtype and rcode, url and user agent, version, subject and JA3."
+          }
+        }
+      },
+      "RecordList": {
+        "type": "object",
+        "required": [
+          "records",
+          "total",
+          "clients",
+          "top"
+        ],
+        "properties": {
+          "records": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Record"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "clients": {
+            "type": "integer",
+            "description": "Source addresses among them."
+          },
+          "top": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "name",
+                "count"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "count": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        }
+      },
+      "Rule": {
+        "type": "object",
+        "required": [
+          "id",
+          "sid",
+          "rev",
+          "msg",
+          "text",
+          "enabled",
+          "createdBy",
+          "createdAt",
+          "updatedAt",
+          "alertsLastDay"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "sid": {
+            "type": "integer"
+          },
+          "rev": {
+            "type": "integer"
+          },
+          "msg": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string",
+            "description": "The rule, in Suricata's syntax."
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "createdBy": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "alertsLastDay": {
+            "type": "integer"
+          }
+        }
+      },
+      "Deployment": {
+        "type": "object",
+        "required": [
+          "hash",
+          "total",
+          "online",
+          "degraded",
+          "offline",
+          "versionMismatch",
+          "waiting",
+          "outdated"
+        ],
+        "properties": {
+          "hash": {
+            "type": "string",
+            "description": "Of the enabled local rules and active suppressions: what an up-to-date sensor wrote."
+          },
+          "total": {
+            "type": "integer"
+          },
+          "online": {
+            "type": "integer"
+          },
+          "degraded": {
+            "type": "integer"
+          },
+          "offline": {
+            "type": "integer"
+          },
+          "versionMismatch": {
+            "type": "integer"
+          },
+          "waiting": {
+            "type": "integer"
+          },
+          "outdated": {
+            "type": "integer",
+            "description": "Enrolled sensors that have not written the current rules and suppressions."
+          }
+        }
+      },
+      "RuleList": {
+        "type": "object",
+        "required": [
+          "rules",
+          "deployment"
+        ],
+        "properties": {
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Rule"
+            }
+          },
+          "deployment": {
+            "$ref": "#/components/schemas/Deployment"
+          }
+        }
+      },
+      "NewRule": {
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 8192,
+            "description": "One rule: alert or pass, a header and options with a msg in quotes and a sid from 9000000 to 9999999. lua, luajit, dataset and datarep are refused.",
+            "examples": [
+              "alert http $EXTERNAL_NET any -> $HOME_NET any (msg:\"LOCAL Admin path probe\"; http.uri; content:\"/admin\"; sid:9000104; rev:1;)"
+            ]
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true
+          }
+        }
+      },
+      "RuleChange": {
+        "type": "object",
+        "required": [],
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 8192
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "RuleCheck": {
+        "type": "object",
+        "required": [
+          "ok",
+          "error",
+          "sid",
+          "rev",
+          "msg"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sid": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rev": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "msg": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "Suppression": {
+        "type": "object",
+        "required": [
+          "id",
+          "gid",
+          "sid",
+          "track",
+          "network",
+          "reason",
+          "createdBy",
+          "createdAt",
+          "expiresAt",
+          "state",
+          "line",
+          "signature",
+          "suppressedLastDay"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "gid": {
+            "type": "integer"
+          },
+          "sid": {
+            "type": "integer"
+          },
+          "track": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "by_src",
+                  "by_dst"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "network": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "createdBy": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "active",
+              "expired"
+            ]
+          },
+          "line": {
+            "type": "string",
+            "description": "As written in the sensors' threshold file.",
+            "examples": [
+              "suppress gen_id 1, sig_id 2013028, track by_src, ip 192.0.2.9"
+            ]
+          },
+          "signature": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The signature, from the last alert of that sid."
+          },
+          "suppressedLastDay": {
+            "type": "integer"
+          }
+        }
+      },
+      "SuppressionList": {
+        "type": "object",
+        "required": [
+          "suppressions"
+        ],
+        "properties": {
+          "suppressions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Suppression"
+            }
+          }
+        }
+      },
+      "NewSuppression": {
+        "type": "object",
+        "required": [
+          "sid",
+          "reason"
+        ],
+        "properties": {
+          "sid": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "gid": {
+            "type": "integer",
+            "default": 1
+          },
+          "track": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "by_src",
+                  "by_dst"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "With network: only alerts from (by_src) or to (by_dst) it."
+          },
+          "network": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "An address or a network in CIDR form.",
+            "examples": [
+              "192.0.2.9",
+              "10.0.0.0/8"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "expiresAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Within a year; null for no end."
+          }
+        }
+      },
+      "Sensor": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "description",
+          "status",
+          "version",
+          "hostname",
+          "evePath",
+          "config",
+          "eventsIn",
+          "lastEventAt",
+          "lastSeenAt",
+          "lastError",
+          "suricata",
+          "lastDay",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "waiting-to-enrol",
+              "online",
+              "degraded",
+              "offline",
+              "version-mismatch"
+            ],
+            "description": "degraded: it drops 1% of packets or more, Suricata failed to load rules, or the agent could not write them."
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hostname": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evePath": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "config": {
+            "type": "object",
+            "required": [
+              "upToDate",
+              "appliedAt",
+              "error"
+            ],
+            "properties": {
+              "upToDate": {
+                "type": "boolean"
+              },
+              "appliedAt": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "error": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "eventsIn": {
+            "type": "integer"
+          },
+          "lastEventAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lastSeenAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lastError": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "suricata": {
+            "anyOf": [
+              {
+                "type": "object",
+                "required": [
+                  "at",
+                  "uptimeSeconds",
+                  "rulesLoaded",
+                  "rulesFailed",
+                  "lastReload",
+                  "bitsPerSecond",
+                  "packetsPerSecond",
+                  "dropRatio"
+                ],
+                "properties": {
+                  "at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "uptimeSeconds": {
+                    "type": "integer"
+                  },
+                  "rulesLoaded": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "rulesFailed": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "lastReload": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "bitsPerSecond": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "packetsPerSecond": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "dropRatio": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "0 to 1, over the last minute of counters."
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lastDay": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "hour",
+                "dropRatio",
+                "bitsPerSecond"
+              ],
+              "properties": {
+                "hour": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "dropRatio": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "bitsPerSecond": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "SensorList": {
+        "type": "object",
+        "required": [
+          "sensors"
+        ],
+        "properties": {
+          "sensors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Sensor"
+            }
+          }
+        }
+      },
+      "NewSensor": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Where it listens."
+          }
+        }
+      },
+      "SensorEnrollment": {
+        "type": "object",
+        "required": [
+          "sensor",
+          "enrollToken",
+          "enrollExpiresAt"
+        ],
+        "properties": {
+          "sensor": {
+            "$ref": "#/components/schemas/Sensor"
+          },
+          "enrollToken": {
+            "type": "string",
+            "description": "One-time, for 7 days: start network-ids-agent with it. Shown once."
+          },
+          "enrollExpiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AgentReport": {
+        "type": "object",
+        "required": [
+          "version",
+          "hostname",
+          "evePath"
+        ],
+        "properties": {
+          "version": {
+            "type": "string",
+            "description": "The agent's version; it must be Network IDS's (ADR 0019)."
+          },
+          "hostname": {
+            "type": "string"
+          },
+          "evePath": {
+            "type": "string"
+          },
+          "configHash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The hash of the rules and suppressions the agent last wrote."
+          },
+          "configError": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the last write or reload failed."
+          }
+        }
+      },
+      "AgentEnroll": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/AgentReport"
+          },
+          {
+            "type": "object",
+            "required": [
+              "token"
+            ],
+            "properties": {
+              "token": {
+                "type": "string"
+              }
+            }
+          }
+        ]
+      },
+      "AgentEnrolled": {
+        "type": "object",
+        "required": [
+          "sensorId",
+          "name",
+          "secret"
+        ],
+        "properties": {
+          "sensorId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "secret": {
+            "type": "string",
+            "description": "The agent's own secret from now on. Shown once."
+          }
+        }
+      },
+      "AgentConfig": {
+        "type": "object",
+        "required": [
+          "hash",
+          "rules",
+          "suppressions"
+        ],
+        "properties": {
+          "hash": {
+            "type": "string"
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The enabled local rules, one per line of the agent's rules file."
+          },
+          "suppressions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Suricata suppress lines, for the agent's threshold file."
+          }
+        }
+      },
+      "EventBatch": {
+        "type": "object",
+        "required": [
+          "events"
+        ],
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "maxItems": 5000,
+            "description": "EVE events as Suricata wrote them: alert, flow, dns, http, tls, ssh, stats."
+          }
+        }
+      },
+      "EventsResult": {
+        "type": "object",
+        "required": [
+          "alert",
+          "flow",
+          "record",
+          "stats",
+          "ignored",
+          "refused",
+          "suppressed",
+          "duplicate",
+          "refusals"
+        ],
+        "properties": {
+          "alert": {
+            "type": "integer"
+          },
+          "flow": {
+            "type": "integer"
+          },
+          "record": {
+            "type": "integer"
+          },
+          "stats": {
+            "type": "integer"
+          },
+          "ignored": {
+            "type": "integer",
+            "description": "Other event types, and events past retention."
+          },
+          "refused": {
+            "type": "integer"
+          },
+          "suppressed": {
+            "type": "integer"
+          },
+          "duplicate": {
+            "type": "integer",
+            "description": "Events already kept: a batch sent again."
+          },
+          "refusals": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "Summary": {
+        "type": "object",
+        "required": [
+          "alerts",
+          "sensors",
+          "inspected",
+          "talkers",
+          "signatures",
+          "rules"
+        ],
+        "properties": {
+          "alerts": {
+            "type": "object",
+            "required": [
+              "lastDay",
+              "bySeverity",
+              "lastHourCritical",
+              "suppressed",
+              "perHour"
+            ],
+            "properties": {
+              "lastDay": {
+                "type": "integer"
+              },
+              "bySeverity": {
+                "type": "object",
+                "required": [
+                  "critical",
+                  "high",
+                  "medium",
+                  "low"
+                ],
+                "properties": {
+                  "critical": {
+                    "type": "integer"
+                  },
+                  "high": {
+                    "type": "integer"
+                  },
+                  "medium": {
+                    "type": "integer"
+                  },
+                  "low": {
+                    "type": "integer"
+                  }
+                }
+              },
+              "lastHourCritical": {
+                "type": "integer"
+              },
+              "suppressed": {
+                "type": "integer"
+              },
+              "perHour": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "hour",
+                    "critical",
+                    "high",
+                    "medium",
+                    "low"
+                  ],
+                  "properties": {
+                    "hour": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "critical": {
+                      "type": "integer"
+                    },
+                    "high": {
+                      "type": "integer"
+                    },
+                    "medium": {
+                      "type": "integer"
+                    },
+                    "low": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "sensors": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Deployment"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "names"
+                ],
+                "properties": {
+                  "names": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "name"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "inspected": {
+            "type": "object",
+            "required": [
+              "bitsPerSecond",
+              "dropRatio"
+            ],
+            "properties": {
+              "bitsPerSecond": {
+                "type": "integer"
+              },
+              "dropRatio": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "talkers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "ip",
+                "bytes"
+              ],
+              "properties": {
+                "ip": {
+                  "type": "string"
+                },
+                "bytes": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "signatures": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "gid",
+                "sid",
+                "signature",
+                "severity",
+                "count"
+              ],
+              "properties": {
+                "gid": {
+                  "type": "integer"
+                },
+                "sid": {
+                  "type": "integer"
+                },
+                "signature": {
+                  "type": "string"
+                },
+                "severity": {
+                  "type": "string",
+                  "enum": [
+                    "critical",
+                    "high",
+                    "medium",
+                    "low"
+                  ]
+                },
+                "count": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "rules": {
+            "type": "object",
+            "required": [
+              "local",
+              "suppressions",
+              "loaded",
+              "failed"
+            ],
+            "properties": {
+              "local": {
+                "type": "integer"
+              },
+              "suppressions": {
+                "type": "integer"
+              },
+              "loaded": {
+                "type": "integer"
+              },
+              "failed": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

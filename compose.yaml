@@ -1,0 +1,36 @@
+# Network IDS. Suricata runs on sensors that see a copy of the traffic; network-ids-agent next to each one sends its
+# alerts, flows and protocol logs here and writes the local rules and suppressions it is given (ADR 0070).
+#
+#   openssl rand -hex 32 > openasy-kek   # network-ids' key: sign-in secrets (ADR 0021). Keep it with your backups
+#   docker compose up -d
+#   docker compose logs network-ids | grep 'no owner yet'   # the one-time link that creates the owner account
+services:
+  network-ids:
+    image: ghcr.io/openasy/network-ids:0.1.0
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: [/tmp]
+    ports:
+      - "127.0.0.1:8080:8080" # UI, API and the agents' calls; put a TLS proxy in front to reach it from the sensors
+    volumes:
+      - network-ids-data:/data # SQLite database: sensors, alerts, flows, protocol logs, rules and suppressions
+    secrets:
+      - openasy-kek # mounted at /run/secrets/openasy-kek
+    environment:
+      # The address people and agents open Network IDS at; with a TLS proxy in front, its https:// URL.
+      NETWORK_IDS_PUBLIC_URL: ${NETWORK_IDS_PUBLIC_URL:-http://localhost:8080}
+      NETWORK_IDS_ALERT_RETENTION_DAYS: ${NETWORK_IDS_ALERT_RETENTION_DAYS:-90}
+      NETWORK_IDS_FLOW_RETENTION_DAYS: ${NETWORK_IDS_FLOW_RETENTION_DAYS:-30}
+      # Sign in with your identity provider (OIDC), see the README:
+      # OPENASY_OIDC_ISSUER: https://login.example.com
+      # OPENASY_OIDC_CLIENT_ID: network-ids
+      # OPENASY_OIDC_CLIENT_SECRET: ${OPENASY_OIDC_CLIENT_SECRET}
+
+volumes:
+  network-ids-data:
+
+secrets:
+  openasy-kek:
+    file: ./openasy-kek
