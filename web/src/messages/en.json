@@ -238,7 +238,7 @@
     "title": "Setup",
     "description": "How a sensor is put together: Suricata on a copy of the traffic, and network-ids-agent next to it.",
     "suricata": "Suricata",
-    "suricataDetail": "Write EVE JSON with these event types, load the agent's rules and threshold files, and open the command socket so the agent can reload rules.",
+    "suricataDetail": "Write EVE JSON with these event types, load the agent's rules and threshold files, and open the command socket so the agent can reload rules. Start Suricata without -s or -S: with them it cannot reload rules.",
     "agent": "network-ids-agent",
     "agentDetail": "On the same host, with Suricata's log directory read-only and the directory of the agent's files writable. Add the sensor under Sensors for its token.",
     "how": "What the agent does",

@@ -238,7 +238,7 @@
     "title": "Kurulum",
     "description": "Bir sensörün yapısı: trafiğin bir kopyasında Suricata ve yanında network-ids-agent.",
     "suricata": "Suricata",
-    "suricataDetail": "Bu olay türleriyle EVE JSON yaz, ajanın kural ve eşik dosyalarını yükle ve ajanın kuralları yeniden yükleyebilmesi için komut soketini aç.",
+    "suricataDetail": "Bu olay türleriyle EVE JSON yaz, ajanın kural ve eşik dosyalarını yükle ve ajanın kuralları yeniden yükleyebilmesi için komut soketini aç. Suricata'yı -s ya da -S olmadan başlat: bunlarla kuralları yeniden yükleyemez.",
     "agent": "network-ids-agent",
     "agentDetail": "Aynı makinede; Suricata'nın kayıt dizini salt okunur, ajanın dosyalarının dizini yazılabilir. Belirteci için sensörü Sensörler'de ekle.",
     "how": "Ajan ne yapar",

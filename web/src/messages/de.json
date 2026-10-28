@@ -238,7 +238,7 @@
     "title": "Einrichtung",
     "description": "Wie ein Sensor aufgebaut ist: Suricata an einer Kopie des Verkehrs und network-ids-agent daneben.",
     "suricata": "Suricata",
-    "suricataDetail": "Schreibe EVE JSON mit diesen Ereignistypen, lade die Regel- und Threshold-Dateien des Agenten und öffne den Befehls-Socket, damit der Agent Regeln neu laden kann.",
+    "suricataDetail": "Schreibe EVE JSON mit diesen Ereignistypen, lade die Regel- und Threshold-Dateien des Agenten und öffne den Befehls-Socket, damit der Agent Regeln neu laden kann. Starte Suricata ohne -s oder -S: damit kann es Regeln nicht neu laden.",
     "agent": "network-ids-agent",
     "agentDetail": "Auf demselben Host, mit Suricatas Log-Verzeichnis nur lesbar und dem Verzeichnis der Agent-Dateien beschreibbar. Füge den Sensor unter Sensoren hinzu, um sein Token zu bekommen.",
     "how": "Was der Agent tut",

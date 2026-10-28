@@ -1103,7 +1103,7 @@ docker run -d --name network-ids-agent --restart unless-stopped --read-only \\
   --cap-drop ALL --security-opt no-new-privileges \\
   -v network-ids-agent-data:/data -v "$PWD/openasy-agent-kek:/run/secrets/openasy-agent-kek:ro" \\
   -v /var/log/suricata:/var/log/suricata:ro -v /etc/suricata/openasy:/rules \\
-  -v /var/run/suricata:/var/run/suricata \\
+  -v /var/run/suricata:/var/run/suricata --group-add "$(getent group suricata | cut -d: -f3)" \\
   -e NETWORK_IDS_URL=${origin} -e NETWORK_IDS_ENROLL_TOKEN=${token} \\
   ghcr.io/openasy/network-ids-agent:${colophon.version}`;
 }
