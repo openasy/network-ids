@@ -81,7 +81,7 @@ import {
   type Summary,
   type Suppression,
 } from "./api.ts";
-import { useT } from "./i18n.ts";
+import { useT, viewerLocale, setViewerLocale, fixed } from "./i18n.ts";
 import { search } from "./search.ts";
 
 const PAGES = ["alerts", "flows", "protocols", "rules", "sensors", "setup", "account", "members", "signin", "tokens", "about"] as const;
@@ -149,14 +149,14 @@ function useAction(after: () => void) {
   return [run, error, setError] as const;
 }
 
-const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "medium" });
-const hour = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+const when = (iso: string) => new Date(iso).toLocaleString(viewerLocale(), { dateStyle: "medium", timeStyle: "medium" });
+const hour = (iso: string) => new Date(iso).toLocaleTimeString(viewerLocale(), { hour: "2-digit", minute: "2-digit" });
 const hostPort = (ip: string, port: number | null) => (port === null ? ip : ip.includes(":") ? `[${ip}]:${port}` : `${ip}:${port}`);
-const bits = (bps: number) => (bps >= 1e9 ? `${(bps / 1e9).toFixed(2)} Gbps` : bps >= 1e6 ? `${(bps / 1e6).toFixed(1)} Mbps` : `${Math.round(bps / 1e3)} kbps`);
-const percent = (ratio: number) => `${(ratio * 100).toFixed(ratio < 0.01 ? 2 : 1)}%`;
+const bits = (bps: number) => (bps >= 1e9 ? `${fixed(bps / 1e9, 2)} Gbps` : bps >= 1e6 ? `${fixed(bps / 1e6, 1)} Mbps` : `${Math.round(bps / 1e3)} kbps`);
+const percent = (ratio: number) => `${fixed(ratio * 100, ratio < 0.01 ? 2 : 1)}%`;
 const seconds = (from: string, to: string) => Math.max(0, (Date.parse(to) - Date.parse(from)) / 1000);
 function duration(s: number) {
-  if (s < 60) return `${s.toFixed(s < 10 ? 2 : 0)} s`;
+  if (s < 60) return `${fixed(s, s < 10 ? 2 : 0)} s`;
   if (s < 3600) return `${Math.floor(s / 60)} m ${String(Math.round(s % 60)).padStart(2, "0")} s`;
   if (s < 86_400) return `${Math.floor(s / 3600)} h ${String(Math.floor((s % 3600) / 60)).padStart(2, "0")} m`;
   return `${Math.floor(s / 86_400)} d ${Math.floor((s % 86_400) / 3600)} h`;
@@ -751,7 +751,7 @@ function FlowsPage({ call }: { call: Call }) {
                   ["state", `${cur.state ?? "–"} · ${cur.reason ?? "–"}`],
                   [t("flowsPage.packets"), `${cur.pktsToServer} / ${cur.pktsToClient}`],
                   [t("flowsPage.total"), formatBytes(cur.bytesToServer + cur.bytesToClient)],
-                  [t("flowsPage.ratio"), (cur.bytesToServer / Math.max(1, cur.bytesToClient)).toFixed(2)],
+                  [t("flowsPage.ratio"), fixed(cur.bytesToServer / Math.max(1, cur.bytesToClient), 2)],
                 ]}
               />
               <div className="flex flex-col gap-1">
@@ -980,7 +980,7 @@ function RulesPage({ call, summary, reload }: { call: Call; summary: Summary; re
       <KpiGrid>
         <KpiCard
           label={t("rulesPage.loaded")}
-          value={summary.rules.loaded.toLocaleString()}
+          value={summary.rules.loaded.toLocaleString(viewerLocale())}
           unit={t("rulesPage.onSensors", { count: summary.sensors.total })}
           tone={summary.rules.failed ? "warning" : undefined}
           delta={summary.rules.failed ? { label: t("rulesPage.failed", { count: summary.rules.failed }), intent: "bad" } : undefined}
@@ -1139,11 +1139,11 @@ function SensorCard({ s, call, reload, onToken }: { s: Sensor; call: Call; reloa
               </div>
               <div>
                 <dt className="text-2xs text-fg-muted">{t("sensorsPage.rules")}</dt>
-                <dd className="font-mono font-semibold">{s.suricata?.rulesLoaded?.toLocaleString() ?? "–"}</dd>
+                <dd className="font-mono font-semibold">{s.suricata?.rulesLoaded?.toLocaleString(viewerLocale()) ?? "–"}</dd>
               </div>
               <div>
                 <dt className="text-2xs text-fg-muted">{t("sensorsPage.events")}</dt>
-                <dd className="font-mono font-semibold">{s.eventsIn.toLocaleString()}</dd>
+                <dd className="font-mono font-semibold">{s.eventsIn.toLocaleString(viewerLocale())}</dd>
               </div>
             </dl>
             <Sparkline
@@ -1151,7 +1151,7 @@ function SensorCard({ s, call, reload, onToken }: { s: Sensor; call: Call; reloa
               label={t("sensorsPage.dropRate", { name: s.name })}
               height={28}
               color={drop !== null && drop >= 0.01 ? "var(--oa-warning)" : undefined}
-              format={(v) => `${v.toFixed(2)}%`}
+              format={(v) => `${fixed(v, 2)}%`}
             />
             {s.suricata?.rulesFailed ? <Callout tone="warning" title={t("sensorsPage.rulesFailed", { count: s.suricata.rulesFailed })} /> : null}
             {s.config.error && (
@@ -1470,6 +1470,7 @@ export function App() {
   const installBrand = useInstallBrand();
   const [theme] = useThemePreference();
   const [locale] = useLocalePreference();
+  setViewerLocale(locale);
   return (
     // The install's brand from config/brand.env (ADR 0053); OpenAsy's own look where it sets none.
     <BrandProvider theme={theme} locale={locale} brand={{ name: "OpenAsy", organization: undefined, ...installBrand }} className="min-h-screen">
