@@ -6,7 +6,7 @@
 #   docker compose logs network-ids | grep 'no owner yet'   # the one-time link that creates the owner account
 services:
   network-ids:
-    image: ghcr.io/openasy/network-ids:0.1.1
+    image: ghcr.io/openasy/network-ids:0.1.2
     restart: unless-stopped
     read_only: true
     cap_drop: [ALL]

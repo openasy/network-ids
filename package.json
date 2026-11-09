@@ -1,6 +1,6 @@
 {
   "name": "@openasy/network-ids",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "OpenAsy Network IDS: Suricata alerts, flows and protocol logs from sensors on a copy of your traffic, with local rules and suppressions sent to every sensor.",
   "license": "AGPL-3.0-only",
