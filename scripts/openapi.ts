@@ -1,6 +1,9 @@
 // Writes openapi.json (ADR 0014, 0024). Run `node scripts/openapi.ts` after changing the API; a test fails when the
 // file is out of date. Sign-in routes come from @openasy/auth and are merged in when the description is served.
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
+
+// The release's version, so a release changes package.json only.
+const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
 
 type S = Record<string, unknown>;
 const ref = (n: string) => ({ $ref: `#/components/schemas/${n}` });
@@ -322,7 +325,7 @@ const spec = {
   openapi: "3.1.1",
   info: {
     title: "OpenAsy Network IDS API",
-    version: "0.1.0",
+    version,
     summary: "Suricata alerts, flows and protocol logs from sensors on a copy of your traffic, with local rules and suppressions.",
     description:
       "Every screen of Network IDS uses this API, and so can your scripts (ADR 0014). Within `/api/v1` changes are additive only; anything removed is deprecated first (ADR 0024). Errors use Problem Details (RFC 9457).\n\nSensors send their events through network-ids-agent, which enrols once with a token from `POST /api/v1/sensors` and then calls `/api/v1/agent/*` with its own secret. Everything else takes the session of a signed-in person or an API token, and each operation names the role it needs (`x-openasy-role`: viewer, editor, admin; ADR 0003).\n\nSign-in, members and API tokens are under `/api/v1/auth`, provided by [@openasy/auth](https://github.com/openasy/auth#routes).",
